@@ -1,0 +1,47 @@
+# What Explainly needs around it: the database (PostgreSQL with pgvector)
+# and, if you want no API key, a local AI model (Ollama).
+# Port 5433 on purpose, so it does not clash with another PostgreSQL on 5432.
+#
+#   docker compose up -d      start
+#   docker compose down       stop (data stays)
+#   docker compose down -v    stop and delete all data
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: explainly-db
+    environment:
+      POSTGRES_USER: explainly
+      POSTGRES_PASSWORD: explainly
+      POSTGRES_DB: explainly
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - explainly-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U explainly"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # A local AI model, so the app needs no API key. Uses the NVIDIA card.
+  #   docker exec explainly-ollama ollama pull qwen2.5:7b     download a model (once)
+  ollama:
+    image: ollama/ollama
+    container_name: explainly-ollama
+    runtime: nvidia  # gives the container the graphics card
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      # How much text the model can read at once. The default is too small for a lecture.
+      OLLAMA_CONTEXT_LENGTH: 8192
+      # Keep the model in memory. Otherwise it is unloaded after 5 quiet
+      # minutes and the next answer waits for it to load again.
+      OLLAMA_KEEP_ALIVE: -1
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - explainly-ollama:/root/.ollama
+
+volumes:
+  explainly-db:
+  explainly-ollama:
